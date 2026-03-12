@@ -15,6 +15,32 @@ defmodule CGx do
 
   use Application
 
+  # a is sparse in CSR format (using lists for values, colidx, and rowptr)
+  def matvecmul(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x) do
+     #x = Nx.to_list(x)
+     CSR0.spmv(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x)
+  end
+
+  # a is sparse in CSR format (using tensors for values, colidx, and rowptr)
+  def matvecmul(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x) do
+     CSR1.spmv(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x)
+  end
+
+  # a is sparse in CSR format, with rowidx (i.e., COO-based spmv)
+  def matvecmul(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x) do
+     CSR2.spmv(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x)
+  end
+
+  # a is sparse in COO format
+  def matvecmul(%COO{values: v, rowidx: r, colidx: c, n: n}, x) do
+    COO.spmv(%COO{values: v, rowidx: r, colidx: c, n: n}, x)
+  end
+
+  # a is dense
+  def matvecmul(a, x) do
+    Nx.dot(a, x)
+  end
+
   def main_loop(z, _, _, _, rnorm, 0, _), do: {z, Nx.to_number(rnorm)}
   def main_loop(_, shift, a, x, _, it, tol) do
         {z, rnorm} = conjgrad(a, x, tol)
@@ -43,7 +69,7 @@ defmodule CGx do
 
       z = conjgrad_loop(a, z, r, rho, p, 25, tol, bnorm)
 
-      rnorm = enorm(Nx.subtract(x, Nx.dot(a,z)))
+      rnorm = enorm(Nx.subtract(x, matvecmul(a, z)))
 
       {z, rnorm}
   end
@@ -56,7 +82,7 @@ defmodule CGx do
 
   def conjgrad_loop(a, z, r, rho, p, i, tol, bnorm) do
 
-      q = Nx.dot(a, p)
+      q = matvecmul(a, p)
       alpha = Nx.divide(rho, Nx.dot(p, q))
       z = Nx.add(z, Nx.multiply(alpha, p))
       r = Nx.subtract(r, Nx.multiply(alpha, q))
@@ -74,52 +100,7 @@ defmodule CGx do
       end
   end
 
-  def simple_example(niter, tol, shift) do
 
-    a = Nx.tensor([
-            [4.0, 1.0],
-            [1.0, 3.0]
-      ])
-
-    x = Nx.tensor([1.0, 2.0])
-
-    CGx.main_loop(nil, shift, a, x, nil, niter, tol)
-
-  end
-
-  def laplacian_1d_matrix(niter, tol, shift) do
-
-    a = Nx.tensor([
-      [ 2.0, -1.0,  0.0,  0.0],
-      [-1.0,  2.0, -1.0,  0.0],
-      [ 0.0, -1.0,  2.0, -1.0],
-      [ 0.0,  0.0, -1.0,  2.0]
-    ])
-
-    x = Nx.tensor([1.0, 0.0, 0.0, 1.0])
-
-    CGx.main_loop(nil, shift, a, x, nil, niter, tol)
-  end
-
-  def randomic_sparse_matrix(niter, tol, shift) do
-
-    n = 500
-
-    a = generate_spd_sparse(n, 0.05, 10.0)
-    x = generate_rhs(n)
-
-    CGx.main_loop(nil, shift, a, x, nil, niter, tol)
-  end
-
-  def npb_like_matrix(niter, tol, shift) do
-
-    n = 500
-
-    a = generate_npb_like_matrix(n, 10, 10.0)
-    x = generate_rhs(n)
-
-    CGx.main_loop(nil, shift, a, x, nil, niter, tol)
-  end
 
   def start(_type, _args) do
     children = []
@@ -134,7 +115,7 @@ defmodule CGx do
     tol = 1.0e-5
     shift = Nx.tensor(10)   # shift is a scalar
 
-    {z, rnorm} = randomic_sparse_matrix(niter, tol, shift)
+    {z, rnorm} = CGxExamples.randomic_sparse_matrix(niter, tol, shift)
 
 
     IO.inspect(z, label: "solution")
@@ -147,65 +128,5 @@ defmodule CGx do
   end
 
 
-  def generate_spd_sparse(n, density \\ 0.05, shift \\ 5.0) do
-    key = Nx.Random.key(System.unique_integer())
-
-    {t, key} = Nx.Random.uniform(key, shape: {n, n})
-
-    mask = Nx.less(t, density)
-
-    {t, _} = Nx.Random.normal(key, shape: {n, n})
-
-    values = Nx.multiply(t, mask)
-
-    # tornar simétrica
-    sym =
-      Nx.divide(
-        Nx.add(values, Nx.transpose(values)),
-        2
-      )
-
-    # adicionar shift diagonal
-    Nx.add(sym, Nx.multiply(shift, Nx.eye(n)))
-  end
-
-  def generate_rhs(n) do
-    key = Nx.Random.key(System.unique_integer())
-
-    {t, _} = Nx.Random.normal(key, shape: {n})
-    t
-  end
-
-  def generate_npb_like_matrix(n, nz_per_row \\ 10, shift \\ 10.0) do
-    key = Nx.Random.key(System.unique_integer())
-    rows =
-      for i <- 0..(n-1) do
-        cols =
-          Enum.take_random(0..(n-1), nz_per_row)
-
-        Enum.map(cols, fn j ->
-          {val, _} = Nx.Random.normal(key, shape: {})
-
-          val |> Nx.to_number()
-        end)
-      end
-
-    dense =
-      Nx.tensor(
-        for {row, i} <- Enum.with_index(rows) do
-          r = List.duplicate(0.0, n)
-
-          Enum.reduce(Enum.with_index(row), r, fn {v, j}, acc ->
-            List.replace_at(acc, j, v)
-          end)
-        end
-      )
-
-     # IO.inspect(dense, label: "dense")
-
-    sym = Nx.divide(Nx.add(dense, Nx.transpose(dense)), 2)
-
-    Nx.add(sym, Nx.multiply(shift, Nx.eye(n)))
- end
 
 end
