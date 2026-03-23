@@ -41,62 +41,70 @@ defmodule CGx do
     Nx.dot(a, x)
   end
 
-  def main_loop(z, _, _, _, rnorm, 0, _), do: {z, Nx.to_number(rnorm)}
-  def main_loop(_, shift, a, x, _, it, tol) do
-        {z, rnorm} = conjgrad(a, x, tol)
+  def main_loop(z, _, _, _, rnorm, 0, _, mvtime), do: {z, Nx.to_number(rnorm), mvtime}
+  def main_loop(_, shift, a, x, _, it, tol, mvtime) do
+        {z, rnorm, mvtime} = conjgrad(a, x, tol, mvtime)
         zeta = Nx.add(shift, Nx.divide(1, Nx.dot(x, z)))
         IO.puts("it=#{it}, rnorm=#{rnorm |> Nx.to_number}, zeta=#{zeta |> Nx.to_number} ---")
 
         if Nx.to_number(rnorm) < tol do
-          {z, Nx.to_number(rnorm)}
+          {z, Nx.to_number(rnorm), mvtime}
         else
           x = Nx.divide(z, enorm(z))          # update_x
-          main_loop(z, shift, a, x, rnorm, it-1, tol)
+          main_loop(z, shift, a, x, rnorm, it-1, tol, mvtime)
         end
   end
 
-  def conjgrad(a, x, tol) do
+  def conjgrad(a, x, tol, mvtime) do
 
       {s} = Nx.shape(x)
 
-      z = Nx.broadcast(0.0, {s})            # init_conj_grad
-      r = x                                 # init_conj_grad
-      p = r                                 # init_conj_grad
+      z = Nx.broadcast(0.0, {s}) |> Nx.as_type(:f64)  # init_conj_grad
+      r = x                                           # init_conj_grad
+      p = r                                           # init_conj_grad
 
       rho = Nx.dot(r, r) # ok
 
       bnorm = enorm(x)
 
-      z = conjgrad_loop(a, z, r, rho, p, 25, tol, bnorm)
+      {z, mvtime} = conjgrad_loop(a, z, r, rho, p, 25, tol, bnorm, mvtime)
 
-      rnorm = enorm(Nx.subtract(x, matvecmul(a, z)))
+      {mvtime0, r} = :timer.tc(fn -> matvecmul(a, z) end)
+      mvtime = mvtime + mvtime0
 
-      {z, rnorm}
+      rnorm = enorm(Nx.subtract(x, r))
+
+      {z, rnorm, mvtime}
   end
 
   def enorm(y) do
     Nx.sqrt(Nx.dot(y,y))
   end
 
-  def conjgrad_loop(_, z, _, _, _, 0, _, _), do: z
+  def conjgrad_loop(_, z, _, _, _, 0, _, _, mvtime), do: {z, mvtime}
 
-  def conjgrad_loop(a, z, r, rho, p, i, tol, bnorm) do
+  def conjgrad_loop(a, z, r, rho, p, i, tol, bnorm, mvtime) do
 
-      q = matvecmul(a, p)
+
+      {mvtime0, q} = :timer.tc(fn -> matvecmul(a, p) end)
+
+      mvtime = mvtime + mvtime0
+
       alpha = Nx.divide(rho, Nx.dot(p, q))
       z = Nx.add(z, Nx.multiply(alpha, p))
       r = Nx.subtract(r, Nx.multiply(alpha, q))
 
       rnorm = enorm(r)
+      #IO.inspect(Nx.to_number(Nx.divide(rnorm, bnorm)), label: "relative residual")
 
       if Nx.to_number(Nx.divide(rnorm, bnorm)) < tol do
-        z
+        {z, mvtime}
       else
         rho0 = rho
         rho = Nx.dot(r, r)
         beta = Nx.divide(rho, rho0)
         p = Nx.add(r, Nx.multiply(beta, p))
-        conjgrad_loop(a, z, r, rho, p, i - 1, tol, bnorm)
+        conjgrad_loop(a, z, r, rho, p, i - 1, tol, bnorm, mvtime)
       end
   end
 
@@ -115,7 +123,7 @@ defmodule CGx do
     tol = 1.0e-5
     shift = Nx.tensor(10)   # shift is a scalar
 
-    {z, rnorm} = CGxExamples.randomic_sparse_matrix(niter, tol, shift)
+    {z, rnorm} = CGxExamples.randomic_sparse_matrix(niter, shift, tol)
 
 
     IO.inspect(z, label: "solution")

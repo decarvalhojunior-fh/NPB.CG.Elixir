@@ -1,74 +1,93 @@
 defmodule Makea do
+  import Nx.Defn
 
-  def sprnvc(n, nz, key) do
-    {vals, idxs, key} =
-      Enum.reduce_while(1..(nz*2), {[], [], key}, fn _, {v,i,k} ->
-        if length(v) == nz do
-          {:halt, {v,i,k}}
-        else
-          {val, k} = Nx.Random.uniform(k)
-          {col, k} = Nx.Random.uniform(k)
-
-          j = trunc(Nx.to_number(col) * n)
-
-          if j < n and not Enum.member?(i, j) do
-            {:cont, {[Nx.to_number(val)|v],[j|i],k}}
-          else
-            {:cont, {v,i,k}}
-          end
-        end
-      end)
-
-    {Enum.reverse(vals), Enum.reverse(idxs), key}
-  end
-
-  def vecset(vals, idxs, i) do
-    if Enum.member?(idxs, i) do
-      {vals, idxs}
-    else
-      {[0.5 | vals], [i | idxs]}
-    end
-  end
-
-  def makea_coo(n, nonzer, shift) do
+  deftransform makea_coo(n, nonzer, shift) do
     key = Nx.Random.key(System.unique_integer())
+    makea_coo_defn(key, shift, n: n, nonzer: nonzer)
+  end
 
-    {vals, rows, cols, _} =
-      Enum.reduce(0..(n-1), {[],[],[],key}, fn i,{v,r,c,k} ->
+  defn makea_coo_defn(key, shift, opts \\ []) do
+    opts = keyword!(opts, n: 1, nonzer: 1)
+    n = opts[:n]
+    nonzer = opts[:nonzer]
+    row_width = nonzer + 1
 
-        {vvec, ivec, k} = sprnvc(n, nonzer, k)
+    values0 = Nx.broadcast(0.0, {n, row_width}) |> Nx.as_type(:f64)
+    cols0 = Nx.broadcast(0, {n, row_width}) |> Nx.as_type(:s32)
+    values = values0
+    cols = cols0
 
-        {vvec, ivec} = vecset(vvec, ivec, i)
+    {values, cols, _key, _row} =
+      while {values, cols, key, row = 0}, Nx.less(row, n) do
+        {row_values, row_cols, key} = sprnvc_row(row, key, n: n, nonzer: nonzer)
 
-        {v2,r2,c2} =
-          Enum.reduce(Enum.zip(vvec, ivec), {v,r,c}, fn {val,j},{va,ra,ca} ->
-            {
-              [val|va],
-              [i|ra],
-              [j|ca]
-            }
-          end)
+        values = Nx.put_slice(values, [row, 0], Nx.new_axis(row_values, 0))
+        cols = Nx.put_slice(cols, [row, 0], Nx.new_axis(row_cols, 0))
 
-        {v2,r2,c2,k}
-      end)
+        {values, cols, key, row + 1}
+      end
 
-    # shift diagonal
-    diag_vals = List.duplicate(shift, n)
-    diag_idx = Enum.to_list(0..(n-1))
+    rowidx =
+      Nx.iota({n}, type: :s32)
+      |> Nx.new_axis(1)
+      |> Nx.broadcast({n, row_width})
 
-    values = vals ++ diag_vals
-    rowidx = rows ++ diag_idx
-    colidx = cols ++ diag_idx
+    diag_vals = Nx.broadcast(shift, {n}) |> Nx.as_type(:f64)
+    diag_idx = Nx.iota({n}, type: :s32)
 
-    %COO{
-      values: Nx.tensor(values),
-      rowidx: Nx.tensor(rowidx, type: :s32),
-      colidx: Nx.tensor(colidx, type: :s32),
-      n: n
+    {
+      Nx.concatenate([Nx.flatten(values), diag_vals]),
+      Nx.concatenate([Nx.flatten(cols), diag_idx]),
+      Nx.concatenate([Nx.flatten(rowidx), diag_idx])
     }
   end
 
-  def coo_to_csr(%COO{values: v,rowidx: r,colidx: c,n: n}) do
+  defnp sprnvc_row(row, key, opts \\ []) do
+    opts = keyword!(opts, n: 1, nonzer: 1)
+    n = opts[:n]
+    nonzer = opts[:nonzer]
+    row_width = nonzer + 1
+    idx_positions = Nx.iota({row_width}, type: :s32)
+
+    vals0 = Nx.broadcast(0.0, {row_width}) |> Nx.as_type(:f64)
+    cols0 = Nx.broadcast(-1, {row_width}) |> Nx.as_type(:s32)
+    vals = vals0
+    cols = cols0
+
+    {vals, cols, key, count, _attempt} =
+      while {vals, cols, key, count = 0, attempt = 0},
+            Nx.logical_and(Nx.less(attempt, nonzer * 2), Nx.less(count, nonzer)) do
+        {val, key} = Nx.Random.uniform(key, type: :f64)
+        {col, key} = Nx.Random.uniform(key, type: :f64)
+
+        j = Nx.as_type(Nx.floor(col * n), :s32)
+        fresh? = Nx.all(Nx.not_equal(cols, j))
+        accept? = Nx.logical_and(Nx.less(j, n), fresh?)
+
+        write_mask = Nx.logical_and(Nx.equal(idx_positions, count), accept?)
+
+        vals = Nx.select(write_mask, Nx.broadcast(val, {row_width}), vals)
+        cols = Nx.select(write_mask, Nx.broadcast(j, {row_width}), cols)
+        count = Nx.select(accept?, count + 1, count)
+
+        {vals, cols, key, count, attempt + 1}
+      end
+
+    has_diagonal? = Nx.any(Nx.equal(cols, row))
+    add_diagonal? = Nx.logical_and(Nx.logical_not(has_diagonal?), Nx.less(count, row_width))
+    diagonal_mask = Nx.logical_and(Nx.equal(idx_positions, count), add_diagonal?)
+
+    vals = Nx.select(diagonal_mask, Nx.broadcast(0.5, {row_width}), vals)
+    cols = Nx.select(diagonal_mask, Nx.broadcast(row, {row_width}), cols)
+
+    valid? = Nx.greater_equal(cols, 0)
+    safe_vals = Nx.select(valid?, vals, Nx.broadcast(0.0, {row_width}))
+    safe_cols = Nx.select(valid?, cols, Nx.broadcast(0, {row_width}))
+
+    {safe_vals, safe_cols, key}
+  end
+
+  def coo_to_csr(v, r, c) do
 
     triples =
       Enum.zip([
@@ -95,11 +114,10 @@ defmodule Makea do
 
     rowptr = rowptr ++ [length(values)]
 
-    %CSR1{
-      values: Nx.tensor(Enum.reverse(values)),
-      colidx: Nx.tensor(Enum.reverse(colidx), type: :s32),
-      rowptr: Nx.tensor(rowptr, type: :s32),
-      n: n
+    {
+      Nx.tensor(Enum.reverse(values), type: :f64),
+      Nx.tensor(Enum.reverse(colidx), type: :s32),
+      Nx.tensor(rowptr, type: :s32)
     }
   end
 

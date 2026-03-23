@@ -12,7 +12,7 @@ defmodule CSR2 do
 
     rows =
       for i <- 0..(n-1),
-          k <- Enum.at(r, i)..(Enum.at(r, i+1) - 1),
+          _k <- Enum.at(r, i)..(Enum.at(r, i+1) - 1),
           do: i
 
     Nx.tensor(rows, type: :s32)

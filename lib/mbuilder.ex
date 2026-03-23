@@ -50,7 +50,9 @@ defmodule MBuilder do
 
     diag = Nx.sum(Nx.abs(sym), axes: [1])
 
-    Nx.add(sym, Nx.make_diagonal(Nx.add(diag, shift)))
+    a = Nx.add(sym, Nx.make_diagonal(Nx.add(diag, shift)))
+
+    Nx.as_type(a, :f64)
   end
 
   def generate_rhs(n) do
@@ -63,11 +65,11 @@ defmodule MBuilder do
   def generate_spd_sparse_npb_like(n, nz_per_row \\ 10, shift \\ 10.0) do
     key = Nx.Random.key(System.unique_integer())
     rows =
-      for i <- 0..(n-1) do
+      for _i <- 0..(n-1) do
         cols =
           Enum.take_random(0..(n-1), nz_per_row)
 
-        Enum.map(cols, fn j ->
+        Enum.map(cols, fn _j ->
           {val, _} = Nx.Random.normal(key, shape: {})
 
           val |> Nx.to_number()
@@ -76,7 +78,7 @@ defmodule MBuilder do
 
     dense =
       Nx.tensor(
-        for {row, i} <- Enum.with_index(rows) do
+        for {row, _i} <- Enum.with_index(rows) do
           r = List.duplicate(0.0, n)
 
           Enum.reduce(Enum.with_index(row), r, fn {v, j}, acc ->

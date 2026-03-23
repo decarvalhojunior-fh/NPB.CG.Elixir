@@ -8,12 +8,13 @@ defmodule CGxTest12 do
 
   test "NPB Like COO matrix" do
 
-    tol = 1.0e-7
+    tol = 0.0
 
-    {z, rnorm} = CGxExamples.npb_like_coo_matrix(tol)
+    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix(tol)
 
     IO.inspect(z, label: "z")
     IO.inspect(rnorm, label: "solution residual")
+    IO.inspect(zeta, label: "zeta")
 
     assert rnorm <= tol
 
