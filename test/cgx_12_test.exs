@@ -4,13 +4,11 @@ defmodule CGxTest12 do
 
   @tag timeout: :infinity
 
-  @tag timeout: :infinity
-
-  test "NPB Like COO matrix" do
+  test "NPB Like COO matrix - DEFN" do
 
     tol = 0.0
 
-    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix(tol)
+    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix_exla(tol)
 
     IO.inspect(z, label: "z")
     IO.inspect(rnorm, label: "solution residual")

@@ -6,7 +6,7 @@ defmodule CGxTest11 do
 
   test "NPB Like CSR2 matrix" do
 
-    tol = 1.0e-7
+    tol = 0.0
 
     {z, rnorm, zeta} = CGxExamples.npb_like_csr2_matrix(tol)
 

@@ -4,26 +4,6 @@ defmodule CGx1_notol do
 
   use Application
 
-  # a is sparse in CSR format (using lists for values, colidx, and rowptr)
-#  defn matvecmul(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x) do
-#     CSR0.spmv(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x)
-#  end
-
-  # a is sparse in CSR format (using tensors for values, colidx, and rowptr)
-#  defn matvecmul(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x) do
-#     CSR1.spmv(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x)
-#  end
-
-  # a is sparse in CSR format, with rowidx (i.e., COO-based spmv)
-#  defn matvecmul(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x) do
-#     CSR2.spmv(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x)
-#  end
-
-  # a is sparse in COO format
-#  defn matvecmul(%COO{values: v, rowidx: r, colidx: c, n: n}, x) do
-#    COO.spmv(%COO{values: v, rowidx: r, colidx: c, n: n}, x)
-#  end
-
   # a is dense
   defn matvecmul(a, x) do
     Nx.dot(a, x)

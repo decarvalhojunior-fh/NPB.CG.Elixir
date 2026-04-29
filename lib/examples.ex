@@ -1,6 +1,6 @@
 defmodule CGxExamples do
 
-  def simple_example(niter, shift) do
+  def simple_example(niter, shift, tol) do
 
     a = Nx.tensor([
             [4.0, 1.0],
@@ -9,12 +9,11 @@ defmodule CGxExamples do
 
     x = Nx.tensor([1.0, 2.0], type: :f64)
 
-    tol = 1.0e-7
     CGx1.main_loop(shift, a, x, niter, tol)
 
   end
 
-  def laplacian_1d_matrix(niter, shift) do
+  def laplacian_1d_matrix(niter, shift, tol) do
 
     a = Nx.tensor([
       [ 2.0, -1.0,  0.0,  0.0],
@@ -25,15 +24,12 @@ defmodule CGxExamples do
 
     x = Nx.tensor([1.0, 0.0, 0.0, 1.0], type: :f64)
 
-    tol = 1.0e-7
     CGx1.main_loop(shift, a, x, niter, tol)
   end
 
-  def randomic_dense_matrix(niter, shift) do
+  def randomic_dense_matrix(niter, shift, tol) do
 
     n = 7000
-
-    tol = 0.0
 
     IO.inspect(n, label: "matrix size n")
     a = MBuilder.generate_spd_dense_npb_like(n, 10.0)
@@ -106,7 +102,7 @@ defmodule CGxExamples do
     {z, rnorm, zeta}
   end
 
-  def simple_csr_matrix_0(niter, shift, tol) do
+  def simple_csr_matrix_0(niter, shift, _tol) do
 
     values =[
                  2.0, -1.0,
@@ -137,11 +133,11 @@ defmodule CGxExamples do
 
     x = Nx.tensor([1.0, 0.0, 0.0, 1.0]) |> Nx.as_type(:f64)
 
-    CGx.main_loop(nil, shift, a, x, nil, niter, tol, 0.0)
+    CGx.main(nil, shift, a, x, nil, nil, niter)
 
   end
 
-  def simple_csr_matrix_1(niter, shift, tol) do
+  def simple_csr_matrix_1(niter, shift, _tol) do
 
     values = Nx.tensor([
                  2.0, -1.0,
@@ -174,11 +170,11 @@ defmodule CGxExamples do
 
     x = Nx.tensor([1.0, 0.0, 0.0, 1.0])  |> Nx.as_type(:f64)
 
-    CGx.main_loop(nil, shift, a, x, nil, niter, tol, 0.0)
+    CGx.main(nil, shift, a, x, nil, nil, niter)
 
   end
 
-  def simple_csr_matrix_2(niter, shift, tol) do
+  def simple_csr_matrix_2(niter, shift, _tol) do
 
     values = Nx.tensor([
                  2.0, -1.0,
@@ -212,11 +208,11 @@ defmodule CGxExamples do
 
     x = Nx.tensor([1.0, 0.0, 0.0, 1.0])  |> Nx.as_type(:f64)
 
-    CGx.main_loop(nil, shift, a, x, nil, niter, tol, 0.0)
+    CGx.main(nil, shift, a, x, nil, nil, niter)
 
   end
 
-  def simple_coo_matrix(niter, shift, tol) do
+  def simple_coo_matrix(niter, shift, _tol) do
 
     values = Nx.tensor([
       2.0,
@@ -266,12 +262,12 @@ defmodule CGxExamples do
 
     IO.puts("starting untimed iteration...")
     x = Nx.tensor([1.0, 0.0, 0.0, 1.0], type: :f64)
-    CGx2.main_loop(shift, values, colidx, rowidx, x, 1, tol)
+    CGx2.main(shift, values, colidx, rowidx, x, 1)
 
     IO.puts("starting timed iterations...")
     x = Nx.tensor([1.0, 0.0, 0.0, 1.0], type: :f64)
      {timed_us, {z, rnorm, zeta}} = :timer.tc(fn ->
-        CGx2.main_loop(shift, values, colidx, rowidx, x, niter, tol)
+        CGx2.main(shift, values, colidx, rowidx, x, niter)
      end)
 
     IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
@@ -280,13 +276,17 @@ defmodule CGxExamples do
 
   end
 
-  def npb_like_csr1_matrix(tol) do
+  def npb_like_csr1_matrix(_tol) do
 
-    params = Params.npb_cg_params(:S)
+    params = Params.npb_cg_params(:W)
 
-    {values, colidx, rowidx} = Nx.with_default_backend(Nx.BinaryBackend, fn ->
-      Makea.makea_coo(params.n, params.nonzer, params.shift)
+    {timed_makea, {values, colidx, rowidx}} = :timer.tc(fn ->
+        Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                 Makea.makea_coo(params.n, params.nonzer, params.shift)
+        end)
     end)
+
+    IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
 
     {values, colidx, rowptr} = Makea.coo_to_csr(values, colidx, rowidx)
 
@@ -299,12 +299,12 @@ defmodule CGxExamples do
 
     IO.puts("starting untimed iteration...")
     x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
-    CGx.main_loop(nil, params.shift, a, x, nil, 1, tol, 0.0)
+    CGx.main(nil, params.shift, a, x, nil, nil, 1)
 
     IO.puts("starting timed iterations...")
     x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
     {timed_us, {z, rnorm, zeta}} = :timer.tc(fn ->
-      CGx.main_loop(nil, params.shift, a, x, nil, params.niter, tol, 0.0)
+      CGx.main(nil, params.shift, a, x, nil, nil, params.niter)
     end)
 
     IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
@@ -312,13 +312,21 @@ defmodule CGxExamples do
     {z, rnorm, zeta}
   end
 
-  def npb_like_csr2_matrix(tol) do
+  def npb_like_csr2_matrix(_tol) do
 
-    params = Params.npb_cg_params(:S)
+    params = Params.npb_cg_params(:B)
 
-    {values, colidx, rowidx} = Nx.with_default_backend(Nx.BinaryBackend, fn ->
-      Makea.makea_coo(params.n, params.nonzer, params.shift)
+    {timed_makea, {values, colidx, rowidx}} = :timer.tc(fn ->
+                    Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                            Makea.makea_coo(params.n, params.nonzer, params.shift)
+                    end)
     end)
+
+    IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
+
+  #  IO.inspect(values, label: "1-values")
+  #  IO.inspect(colidx, label: "1-colidx")
+  #  IO.inspect(rowidx, label: "1-rowidx")
 
     {values, colidx, rowptr} = Makea.coo_to_csr(values, colidx, rowidx)
 
@@ -330,14 +338,20 @@ defmodule CGxExamples do
       n: params.n
     }
 
+  #  IO.inspect(a.values, label: "2-values")
+  #  IO.inspect(a.colidx, label: "2-colidx")
+  #  IO.inspect(a.rowidx, label: "2-rowidx")
+
+
+
     IO.puts("starting untimed iteration...")
     x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
-    CGx.main_loop(nil, params.shift, a, x, nil, 1, tol, 0.0)
+    CGx.main(nil, params.shift, a, x, nil, nil, 1)
 
     IO.puts("starting timed iterations...")
     x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
     {timed_us, {z, rnorm, zeta}} = :timer.tc(fn ->
-      CGx.main_loop(nil, params.shift, a, x, nil, params.niter, tol, 0.0)
+      CGx.main(nil, params.shift, a, x, nil, nil, params.niter)
     end)
 
     IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
@@ -347,29 +361,122 @@ defmodule CGxExamples do
   end
 
 
-  def npb_like_coo_matrix(tol) do
+  def npb_like_coo_matrix_exla(_tol) do
+
+    main_jit = Nx.Defn.jit(&CGx2.main/6)
 
     params = Params.npb_cg_params(:B)
 
     IO.puts("generating matrix in COO format...")
-    {values, colidx, rowidx} = Nx.with_default_backend(Nx.BinaryBackend, fn ->
-      Makea.makea_coo(params.n, params.nonzer, params.shift)
+    {timed_makea, {values, colidx, rowidx}} = :timer.tc(fn ->
+                    Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                            Makea.makea_coo(params.n, params.nonzer, params.shift)
+                    end)
     end)
 
-    IO.puts("starting untimed iteration...")
-    x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
-    CGx2.main_loop(params.shift, values, colidx, rowidx, x, 1, tol)
+    IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
 
-    IO.puts("starting timed iterations...")
+    {values, colidx, rowidx} = Makea.sort_coo(values, colidx, rowidx)
+
+    IO.puts("starting untimed iteration... defn")
+    x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
+    main_jit.(params.shift, values, colidx, rowidx, x, 1)
+
+    IO.puts("starting timed iterations... defn")
     x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
 
-    {timed_us, {z, rnorm, zeta}} = :timer.tc(fn ->
-        CGx2.main_loop(params.shift, values, colidx, rowidx, x, params.niter, tol)
+    {timed_us, {z, rnorm, zeta, it}} = :timer.tc(fn ->
+        main_jit.(params.shift, values, colidx, rowidx, x, params.niter)
      end)
 
-    IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
+    IO.puts("Tempo: #{timed_us / 1_000_000} segundos - it=#{it |> Nx.to_number}")
 
     {z, rnorm, zeta}
   end
+
+  def benchmark_cgx2_exla_types do
+
+    main_jit = Nx.Defn.jit(&CGx2.main/6)
+
+    params = Params.npb_cg_params(:B)
+
+    IO.puts("generating matrix in COO format...")
+    {timed_makea, {values, colidx, rowidx}} = :timer.tc(fn ->
+                    Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                            Makea.makea_coo(params.n, params.nonzer, params.shift)
+                    end)
+    end)
+
+    IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
+
+    {values, colidx, rowidx} = Makea.sort_coo(values, colidx, rowidx)
+
+    [
+      {:f64, values |> Nx.as_type(:f64), Nx.broadcast(1.0, {params.n}) |> Nx.as_type(:f64)},
+      {:f32, values |> Nx.as_type(:f32), Nx.broadcast(1.0, {params.n}) |> Nx.as_type(:f32)}
+    ]
+    |> Enum.map(fn {type, typed_values, x} ->
+      IO.puts("warming up #{type}...")
+      main_jit.(params.shift, typed_values, colidx, rowidx, x, 1)
+
+      IO.puts("timing #{type}...")
+
+      {timed_us, {_z, rnorm, zeta, it}} = :timer.tc(fn ->
+        main_jit.(params.shift, typed_values, colidx, rowidx, x, params.niter)
+      end)
+
+      seconds = timed_us / 1_000_000
+
+      IO.puts(
+        "Tempo #{type}: #{seconds} segundos - it=#{it |> Nx.to_number} - rnorm=#{rnorm |> Nx.to_number} - zeta=#{zeta |> Nx.to_number}"
+      )
+
+      {type, seconds}
+    end)
+  end
+
+  def npb_like_coo_matrix_cpu_1(_tol) do
+
+    params = Params.npb_cg_params(:S)
+
+   IO.puts("generating matrix in COO format...")
+    {timed_makea, {values, colidx, rowidx}} = :timer.tc(fn ->
+                    Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                            Makea.makea_coo(params.n, params.nonzer, params.shift)
+                    end)
+    end)
+
+    IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
+
+    {values, colidx, rowidx} = Makea.sort_coo(values, colidx, rowidx)
+
+    IO.inspect(Nx.size(values), label: "#values")
+
+    a = %COO{
+      values: values,
+      rowidx: rowidx,
+      colidx: colidx,
+      n: params.n
+    }
+
+    #Nx.with_default_backend(Nx.BinaryBackend, fn ->
+      IO.puts("starting untimed iteration... no defn")
+      x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
+      CGx.main(nil, params.shift, a, x, nil, nil, 1)
+
+      IO.puts("starting timed iterations... no defn")
+      x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
+
+      {timed_us, {z, rnorm, zeta}} = :timer.tc(fn ->
+          CGx.main(nil, params.shift, a, x, nil, nil, params.niter)
+       end)
+
+      IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
+
+      {z, rnorm, zeta}
+    #end)
+
+  end
+
 
 end

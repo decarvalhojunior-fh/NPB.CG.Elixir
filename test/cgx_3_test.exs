@@ -10,7 +10,7 @@ defmodule CGxTest3 do
     tol = 0
     shift = Nx.tensor(10)   # shift is a scalar
 
-    {z, rnorm, zeta} = CGxExamples.randomic_dense_matrix(niter, shift)
+    {z, rnorm, zeta} = CGxExamples.randomic_dense_matrix(niter, shift, tol)
 
     IO.inspect(z, label: "z")
     IO.inspect(rnorm, label: "solution residual")
