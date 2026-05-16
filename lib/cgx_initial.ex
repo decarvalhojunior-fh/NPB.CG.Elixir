@@ -1,4 +1,4 @@
-defmodule CGxx do
+defmodule CGx3 do
   @moduledoc """
   Documentation for `CGx`.
   """
@@ -15,32 +15,7 @@ defmodule CGxx do
 
   use Application
 
-  # a is sparse in CSR format (using lists for values, colidx, and rowptr)
-  def matvecmul(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x, _t0) do
-     #x = Nx.to_list(x)
-     CSR0.spmv(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x)
-  end
 
-  # a is sparse in CSR format (using tensors for values, colidx, and rowptr)
-  def matvecmul(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x, _t0) do
-     CSR1.spmv(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x)
-  end
-
-  # a is sparse in CSR format, with rowidx (i.e., COO-based spmv)
-  def matvecmul(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x, _t0) do
-     CSR2.spmv(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x)
-  end
-
-  # a is sparse in COO format
-  def matvecmul(%COO{values: v, rowidx: ri, colidx: c, n: n}, x, t0) do
-    COO.spmv(%COO{values: v, rowidx: ri, colidx: c, n: n}, x, t0)
-    #COO.spmv_defn(v, ri, c, x, t0)
-  end
-
-  # a is dense
-  def matvecmul(a, x, _t0) do
-    Nx.dot(a, x)
-  end
 
   def main_loop(z, _, _, _, rnorm, zeta, 0, _), do: {z, Nx.to_number(rnorm), Nx.to_number(zeta)}
   def main_loop(_, shift, a, x, _, _, it, t0) do
@@ -71,7 +46,7 @@ defmodule CGxx do
 
       z = conjgrad_loop(a, z, r, rho, p, 25, bnorm, t0)
 
-      r = matvecmul(a, z, t0)
+      r = MVMulSerial.mv_multiply(a, z, t0)
 
       rnorm = enorm(Nx.subtract(x, r))
 
@@ -86,7 +61,7 @@ defmodule CGxx do
 
   def conjgrad_loop(a, z, r, rho, p, i, bnorm, t0) do
 
-      q = matvecmul(a, p, t0)
+      q = MVMulSerial.mv_multiply(a, p, t0)
 
       alpha = Nx.divide(rho, Nx.dot(p, q))
       z = Nx.add(z, Nx.multiply(alpha, p))
@@ -143,7 +118,7 @@ defmodule CGxx do
 
     niter = 15
     tol = 1.0e-5
-    shift = Nx.tensor(10)   # shift is a scalar
+    shift = Nx.tensor(10.0, type: :f64)   # shift is a scalar
 
     {z, rnorm, zeta} = CGxExamples.parallel_example(niter, shift, tol, g2x2)
 

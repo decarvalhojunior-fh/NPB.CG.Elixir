@@ -8,7 +8,7 @@ defmodule CGxTest4 do
 
     niter = 15
     tol = 1.0e-7
-    shift = Nx.tensor(10)   # shift is a scalar
+    shift = Nx.tensor(10.0, type: :f64)   # shift is a scalar
 
     {z, rnorm, zeta} = CGxExamples.randomic_sparse_matrix(niter, shift, tol)
 

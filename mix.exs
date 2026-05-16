@@ -23,9 +23,10 @@ defmodule CGx.MixProject do
   defp deps do
     [
       {:nx, "~> 0.11"},
-      {:exla, "~> 0.11"}
+      {:exla, "~> 0.11"},
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:collective_elixir, path: "../Collective-Communication-for-Nx-tensors"}
     ]
   end
 end

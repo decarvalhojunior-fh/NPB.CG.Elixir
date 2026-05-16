@@ -1,4 +1,4 @@
-defmodule CGxTest13 do
+defmodule CGxTest14 do
   use ExUnit.Case
   doctest CGx
 
@@ -8,7 +8,7 @@ defmodule CGxTest13 do
 
     tol = 0.0
 
-    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix_cpu_1(tol)
+    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix_parallel_launcher(tol)
 
     IO.inspect(z, label: "z")
     IO.inspect(rnorm, label: "solution residual")

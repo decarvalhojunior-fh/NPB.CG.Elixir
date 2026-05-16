@@ -8,7 +8,7 @@ defmodule CGxTest3 do
 
     niter = 15
     tol = 0
-    shift = Nx.tensor(10)   # shift is a scalar
+    shift = Nx.tensor(10.0, type: :f64)   # shift is a scalar
 
     {z, rnorm, zeta} = CGxExamples.randomic_dense_matrix(niter, shift, tol)
 

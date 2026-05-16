@@ -376,7 +376,7 @@ defmodule CGxExamples do
 
     IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
 
-    {values, colidx, rowidx} = Makea.sort_coo(values, colidx, rowidx)
+    {values, rowidx, colidx} = Makea.sort_coo(values, rowidx, colidx)
 
     IO.puts("starting untimed iteration... defn")
     x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
@@ -409,7 +409,7 @@ defmodule CGxExamples do
 
     IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
 
-    {values, colidx, rowidx} = Makea.sort_coo(values, colidx, rowidx)
+    {values, rowidx, colidx} = Makea.sort_coo(values, rowidx, colidx)
 
     [
       {:f64, values |> Nx.as_type(:f64), Nx.broadcast(1.0, {params.n}) |> Nx.as_type(:f64)},
@@ -437,7 +437,7 @@ defmodule CGxExamples do
 
   def npb_like_coo_matrix_cpu_1(_tol) do
 
-    params = Params.npb_cg_params(:S)
+    params = Params.npb_cg_params(:B)
 
    IO.puts("generating matrix in COO format...")
     {timed_makea, {values, colidx, rowidx}} = :timer.tc(fn ->
@@ -448,7 +448,7 @@ defmodule CGxExamples do
 
     IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
 
-    {values, colidx, rowidx} = Makea.sort_coo(values, colidx, rowidx)
+    {values, rowidx, colidx} = Makea.sort_coo(values, rowidx, colidx)
 
     IO.inspect(Nx.size(values), label: "#values")
 
@@ -462,13 +462,13 @@ defmodule CGxExamples do
     #Nx.with_default_backend(Nx.BinaryBackend, fn ->
       IO.puts("starting untimed iteration... no defn")
       x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
-      CGx.main(nil, params.shift, a, x, nil, nil, 1)
+      CGx3.main(nil, params.shift, a, x, nil, nil, 1)
 
       IO.puts("starting timed iterations... no defn")
       x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
 
       {timed_us, {z, rnorm, zeta}} = :timer.tc(fn ->
-          CGx.main(nil, params.shift, a, x, nil, nil, params.niter)
+          CGx3.main(nil, params.shift, a, x, nil, nil, params.niter)
        end)
 
       IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
@@ -478,5 +478,112 @@ defmodule CGxExamples do
 
   end
 
+def npb_like_coo_matrix_parallel_launcher(tol) do
+
+    hostname = "heron-Inspiron-14-5440"
+    nodes = Enum.map(["p0", "p1", "p2", "p3"], fn sname -> String.to_atom(sname <> "@" <> hostname) end)
+
+    IO.puts("Spawning processes on nodes: #{inspect(nodes)}")
+
+    pid_workers = Enum.map(1..16, fn node ->
+          #Node.spawn_link(node, CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+           spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+        end)
+
+    IO.inspect(pid_workers, label: "spawned pids")
+
+    for pid <- pid_workers do
+      send(pid, {:pid_manager, self()})
+      send(pid, {:pid_workers, pid_workers})
+    end
+
+    IO.puts("Sent pids to all processes. Waiting for results...")
+
+    receive do
+      {:result, result} -> result
+    end
+
+  end
+
+
+def npb_like_coo_matrix_parallel(_tol) do
+
+   IO.puts("Process #{inspect(self())} started and waiting for pids...")
+
+   pid_manager = receive do
+            {:pid_manager, pid} -> pid
+       end
+
+   pid_workers = receive do
+            {:pid_workers, pids} -> pids
+       end
+
+   IO.puts("Process #{inspect(self())} received pids: #{inspect(pid_workers)}")
+
+   nprocs = length(pid_workers)
+
+   {npcols, nprows} =  CGx.get_active_procs(3, nprocs)
+
+   # build the groups for parallel execution
+
+   group_solve = Group.new_group(pid_workers, topology: {nprows, npcols})
+   group_row = Group.group_split(group_solve, [0])
+
+   IO.inspect(group_row, label: "group_row")
+
+   params = Params.npb_cg_params(:S)
+
+   {firstrow, lastrow, firstcol, lastcol} =
+          if is_nil(group_solve) do
+              {1, params.n, 1, params.n}
+          else
+              CGx.setup_submatrix_info(params.n, group_solve)
+          end
+
+   IO.puts("generating matrix in COO format...")
+    {timed_makea, {values, colidx, rowidx}} = :timer.tc(fn ->
+                    Nx.with_default_backend(Nx.BinaryBackend, fn ->
+                        Makea.makea_coo(params.n, params.nonzer, params.shift, firstrow: firstrow, lastrow: lastrow, firstcol: firstcol, lastcol: lastcol)
+                    end)
+    end)
+
+    IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
+
+    {values, rowidx, colidx} = Makea.sort_coo(values, rowidx, colidx)
+
+    IO.inspect(Nx.size(values), label: "#values")
+
+    params_n = lastrow - firstrow + 1
+
+    IO.inspect({group_solve.coord, firstrow, lastrow, firstcol, lastcol}, label: "===> ")
+    IO.inspect(params_n, label: "n = ")
+
+    a = %COO{
+      values: values,
+      rowidx: rowidx,
+      colidx: Nx.subtract(colidx, firstcol - 1),
+      n: params_n
+    }
+
+    IO.puts("starting untimed iteration... no defn")
+    x = Nx.broadcast(1.0, {lastcol - firstcol + 1})  |> Nx.as_type(:f64) # generate_rhs(params.n)
+    CGx.main(nil, params.shift, a, x, nil, nil, 1, group_row: group_row, group_solve: group_solve)
+
+    IO.puts("starting timed iterations... no defn")
+    x = Nx.broadcast(1.0, {lastcol - firstcol + 1})  |> Nx.as_type(:f64) # generate_rhs(params.n)
+
+    {timed_us, {z, rnorm, zeta}} = :timer.tc(fn ->
+        CGx.main(nil, params.shift, a, x, nil, nil, params.niter, group_row: group_row, group_solve: group_solve)
+      end)
+
+    IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
+
+    if self() == hd(pid_workers) do
+      send(pid_manager, {:result, {z, rnorm, zeta}})
+    end
+
+    IO.puts("Process #{inspect(self())} finished computation and sent results to #{inspect(pid_manager)}")
+
+  end
 
 end

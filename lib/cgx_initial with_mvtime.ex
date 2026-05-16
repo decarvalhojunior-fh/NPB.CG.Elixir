@@ -18,23 +18,23 @@ defmodule CGx99 do
   # a is sparse in CSR format (using lists for values, colidx, and rowptr)
   def matvecmul(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x) do
      #x = Nx.to_list(x)
-     CSR0.spmv(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x)
+     CSR0.mv_multiply(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x)
   end
 
   # a is sparse in CSR format (using tensors for values, colidx, and rowptr)
   def matvecmul(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x) do
-     CSR1.spmv(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x)
+     CSR1.mv_multiply(%CSR1{values: v, colidx: c, rowptr: r, n: n}, x)
   end
 
-  # a is sparse in CSR format, with rowidx (i.e., COO-based spmv)
+  # a is sparse in CSR format, with rowidx (i.e., COO-based mv_multiply)
   def matvecmul(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x) do
-     CSR2.spmv(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x)
+     CSR2.mv_multiply(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x)
   end
 
   # a is sparse in COO format
   def matvecmul(%COO{values: v, rowidx: ri, colidx: c, n: n}, x) do
-    #COO.spmv(%COO{values: v, rowidx: ri, colidx: c, n: n}, x)
-    COO.spmv_coo(v, ri, c, n, x)
+    #COO.mv_multiply(%COO{values: v, rowidx: ri, colidx: c, n: n}, x)
+    COO.mv_multiply_coo(v, ri, c, n, x)
   end
 
   # a is dense
@@ -145,7 +145,7 @@ defmodule CGx99 do
 
     niter = 15
     tol = 1.0e-5
-    shift = Nx.tensor(10)   # shift is a scalar
+    shift = Nx.tensor(10.0, type: :f64)   # shift is a scalar
 
     {z, rnorm, zeta} = CGxExamples.parallel_example(niter, shift, tol, g2x2)
 

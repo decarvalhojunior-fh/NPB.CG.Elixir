@@ -5,7 +5,7 @@ defmodule CSR0 do
             rowptr: nil,
             n: 0
 
-  def spmv(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x) do
+  def mv_multiply(%CSR0{values: v, colidx: c, rowptr: r, n: n}, x) do
 
     result =
       for i <- 0..(n-1) do
@@ -20,11 +20,7 @@ defmodule CSR0 do
         end)
       end
 
-    w = Nx.tensor(result)
-
-    #IO.inspect(w, label: "w")
-
-    w
+    Nx.tensor(result, type: :f64)
   end
 
 end

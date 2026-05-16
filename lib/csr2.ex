@@ -18,7 +18,7 @@ defmodule CSR2 do
     Nx.tensor(rows, type: :s32)
   end
 
-  def spmv(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x) do
+  def mv_multiply(%CSR2{values: v, colidx: c, rowidx: ri, n: n}, x) do
 
     # pega x[colidx]
     xcol = Nx.take(x, c)

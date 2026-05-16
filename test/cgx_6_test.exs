@@ -8,7 +8,7 @@ defmodule CGxTest6 do
 
     niter = 15
     tol = 1.0e-7
-    shift = Nx.tensor(10)   # shift is a scalar
+    shift = Nx.tensor(10.0, type: :f64)   # shift is a scalar
 
     {z, rnorm, zeta} = CGxExamples.simple_csr_matrix_0(niter, shift, tol)
 

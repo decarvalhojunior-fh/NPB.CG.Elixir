@@ -9,8 +9,8 @@ defmodule Makea do
   @t23 :math.pow(2.0, 23)
   @t46 :math.pow(2.0, 46)
 
-  deftransform makea_coo(n, nonzer, shift) do
-    makea_coo_fast(n, nonzer, shift)
+  deftransform makea_coo(n, nonzer, shift, opts \\ []) do
+    makea_coo_fast(n, nonzer, shift, opts)
   end
 
   def makea_coo_fortran(n, nonzer, shift, opts \\ []) do
@@ -653,7 +653,7 @@ defmodule Makea do
         Nx.to_flat_list(c)
       ])
 
-    {v1, r1, c1} = Enum.sort_by(triples, fn {i,j,_}-> {i,j} end) |> zip3()
+    {v1, r1, c1} = Enum.sort_by(triples, fn {_,i,j}-> {i,j} end) |> zip3()
 
     {
       Nx.tensor(v1, type: :f64),

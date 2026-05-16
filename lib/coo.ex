@@ -7,7 +7,7 @@ defmodule COO do
             colidx: nil,
             n: 0
 
-  def spmv(%COO{values: v, rowidx: r, colidx: c, n: n}, x, t0) do
+  def mv_multiply(%COO{values: v, rowidx: r, colidx: c, n: n}, x, t0) do
 
     # pega x[colidx]
     xcol = Nx.take(x, c)
@@ -24,7 +24,7 @@ defmodule COO do
 
   end
 
-  defn spmv_defn(v, r, c, x, t0) do
+  defn mv_multiply_defn(v, r, c, x, t0) do
 
     # pega x[colidx]
     xcol = Nx.take(x, c)
