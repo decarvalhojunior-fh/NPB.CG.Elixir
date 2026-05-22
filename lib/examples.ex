@@ -481,15 +481,15 @@ defmodule CGxExamples do
 def npb_like_coo_matrix_parallel_launcher(clustername, tol) do
 
 
-    #nodes = Enum.map(["p0", "p1", "p2", "p3"], fn sname -> String.to_atom(sname <> "@" <> clustername) end)
+    nodes = Enum.map(["p0", "p1", "p2", "p3"], fn sname -> String.to_atom(sname <> "@" <> clustername) end)
     #nodes = Enum.map(["2", "3", "4", "5"], fn sname -> String.to_atom("node@" <> clustername <> sname) end)
-    nodes = 1..4
+    #nodes = 1..4
 
     IO.puts("Spawning processes on nodes: #{inspect(nodes)}")
 
     pid_workers = Enum.map(nodes, fn node ->
-     #     Node.spawn_link(node, CGxExamples, :npb_like_coo_matrix_parallel, [tol])
-          spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+        IO.puts("Spawning process on node #{node}...")
+          spawn_worker(node, tol)
         end)
 
     IO.inspect(pid_workers, label: "spawned pids")
@@ -581,11 +581,48 @@ def npb_like_coo_matrix_parallel(_tol) do
     IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
 
     if self() == hd(pid_workers) do
-      send(pid_manager, {:result, {z, rnorm, zeta}})
+      send_result(pid_manager, {z, rnorm, zeta})
     end
 
     IO.puts("Process #{inspect(self())} finished computation and sent results to #{inspect(pid_manager)}")
 
   end
+
+  defp spawn_worker(worker_node, tol) when is_atom(worker_node) do
+    #if worker_node == Node.self() do
+    #  spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+    #else
+      Node.spawn_link(worker_node, CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+    #end
+  end
+
+  defp spawn_worker(_worker_node, tol) do
+    spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+  end
+
+  defp send_result(pid_manager, result) do
+    result =
+      if node(pid_manager) == Node.self() do
+        result
+      else
+        transfer_tensors_to_binary(result)
+      end
+
+    send(pid_manager, {:result, result})
+  end
+
+  defp transfer_tensors_to_binary({z, rnorm, zeta}) do
+    {
+      transfer_tensor_to_binary(z),
+      transfer_tensor_to_binary(rnorm),
+      transfer_tensor_to_binary(zeta)
+    }
+  end
+
+  defp transfer_tensor_to_binary(%Nx.Tensor{} = tensor) do
+    Nx.backend_transfer(tensor, Nx.BinaryBackend)
+  end
+
+  defp transfer_tensor_to_binary(value), do: value
 
 end
