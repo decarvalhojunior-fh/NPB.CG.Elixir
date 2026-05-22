@@ -6,9 +6,10 @@ defmodule CGxTest14 do
 
   test "NPB Like COO matrix - NO DEFN" do
 
+    clustername = "heron-Inspiron-14-5440"
     tol = 0.0
 
-    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix_parallel_launcher(tol)
+    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix_parallel_launcher(clustername, tol)
 
     IO.inspect(z, label: "z")
     IO.inspect(rnorm, label: "solution residual")

@@ -478,16 +478,18 @@ defmodule CGxExamples do
 
   end
 
-def npb_like_coo_matrix_parallel_launcher(tol) do
+def npb_like_coo_matrix_parallel_launcher(clustername, tol) do
 
-    hostname = "heron-Inspiron-14-5440"
-    nodes = Enum.map(["p0", "p1", "p2", "p3"], fn sname -> String.to_atom(sname <> "@" <> hostname) end)
+
+    #nodes = Enum.map(["p0", "p1", "p2", "p3"], fn sname -> String.to_atom(sname <> "@" <> clustername) end)
+    #nodes = Enum.map(["2", "3", "4", "5"], fn sname -> String.to_atom("node@" <> clustername <> sname) end)
+    nodes = 1..4
 
     IO.puts("Spawning processes on nodes: #{inspect(nodes)}")
 
-    pid_workers = Enum.map(1..16, fn node ->
-          #Node.spawn_link(node, CGxExamples, :npb_like_coo_matrix_parallel, [tol])
-           spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+    pid_workers = Enum.map(nodes, fn node ->
+     #     Node.spawn_link(node, CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+          spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
         end)
 
     IO.inspect(pid_workers, label: "spawned pids")
