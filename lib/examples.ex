@@ -478,18 +478,16 @@ defmodule CGxExamples do
 
   end
 
-def npb_like_coo_matrix_parallel_launcher(clustername, tol) do
+def npb_like_coo_matrix_parallel_launcher(nodes, problem_size, tol) do
 
 
-    nodes = Enum.map(["p0", "p1", "p2", "p3"], fn sname -> String.to_atom(sname <> "@" <> clustername) end)
-    #nodes = Enum.map(["2", "3", "4", "5"], fn sname -> String.to_atom("node@" <> clustername <> sname) end)
-    #nodes = 1..4
+  
 
     IO.puts("Spawning processes on nodes: #{inspect(nodes)}")
 
     pid_workers = Enum.map(nodes, fn node ->
         IO.puts("Spawning process on node #{node}...")
-          spawn_worker(node, tol)
+          spawn_worker(node, problem_size, tol)
         end)
 
     IO.inspect(pid_workers, label: "spawned pids")
@@ -508,7 +506,7 @@ def npb_like_coo_matrix_parallel_launcher(clustername, tol) do
   end
 
 
-def npb_like_coo_matrix_parallel(_tol) do
+def npb_like_coo_matrix_parallel(problem_size, tol) do
 
    IO.puts("Process #{inspect(self())} started and waiting for pids...")
 
@@ -533,7 +531,7 @@ def npb_like_coo_matrix_parallel(_tol) do
 
    IO.inspect(group_row, label: "group_row")
 
-   params = Params.npb_cg_params(:S)
+   params = Params.npb_cg_params(problem_size)
 
    {firstrow, lastrow, firstcol, lastcol} =
           if is_nil(group_solve) do
@@ -588,16 +586,16 @@ def npb_like_coo_matrix_parallel(_tol) do
 
   end
 
-  defp spawn_worker(worker_node, tol) when is_atom(worker_node) do
+  defp spawn_worker(worker_node, problem_size, tol) when is_atom(worker_node) do
     #if worker_node == Node.self() do
     #  spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
     #else
-      Node.spawn_link(worker_node, CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+      Node.spawn_link(worker_node, CGxExamples, :npb_like_coo_matrix_parallel, [problem_size, tol])
     #end
   end
 
-  defp spawn_worker(_worker_node, tol) do
-    spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
+  defp spawn_worker(_worker_node, problem_size, tol) do
+    spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [problem_size, tol])
   end
 
   defp send_result(pid_manager, result) do

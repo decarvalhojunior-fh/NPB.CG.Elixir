@@ -9,7 +9,11 @@ defmodule CGxTest14 do
     clustername = "heron-Inspiron-14-5440"
     tol = 0.0
 
-    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix_parallel_launcher(clustername, tol)
+      #nodes = Enum.map(["p0", "p1", "p2", "p3"], fn sname -> String.to_atom(sname <> "@" <> clustername) end)
+    #nodes = Enum.map(["2", "3", "4", "5"], fn sname -> String.to_atom("node@" <> clustername <> sname) end)
+    nodes = 1..4
+
+    {z, rnorm, zeta} = CGxExamples.npb_like_coo_matrix_parallel_launcher(nodes, :S, tol)
 
     IO.inspect(z, label: "z")
     IO.inspect(rnorm, label: "solution residual")
