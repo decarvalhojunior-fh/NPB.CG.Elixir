@@ -24,6 +24,7 @@ defmodule MVMulSerial do
 
   # a is dense
   def mv_multiply(a, x, _t0) do
+#    IO.inspect({:dense_mv, Nx.shape(a), Nx.shape(x)}, label: "mv_multiply dense")
     Nx.dot(a, x)
   end
 

@@ -478,16 +478,13 @@ defmodule CGxExamples do
 
   end
 
-def npb_like_coo_matrix_parallel_launcher(nodes, problem_size, tol) do
-
-
-  
+def npb_like_coo_matrix_parallel_launcher(nodes, problem_size, is_sparse) do
 
     IO.puts("Spawning processes on nodes: #{inspect(nodes)}")
 
     pid_workers = Enum.map(nodes, fn node ->
         IO.puts("Spawning process on node #{node}...")
-          spawn_worker(node, problem_size, tol)
+          spawn_worker(node, problem_size, is_sparse)
         end)
 
     IO.inspect(pid_workers, label: "spawned pids")
@@ -506,7 +503,7 @@ def npb_like_coo_matrix_parallel_launcher(nodes, problem_size, tol) do
   end
 
 
-def npb_like_coo_matrix_parallel(problem_size, tol) do
+def npb_like_coo_matrix_parallel(problem_size, is_sparse) do
 
    IO.puts("Process #{inspect(self())} started and waiting for pids...")
 
@@ -553,27 +550,35 @@ def npb_like_coo_matrix_parallel(problem_size, tol) do
 
     IO.inspect(Nx.size(values), label: "#values")
 
-    params_n = lastrow - firstrow + 1
+    n_rows = lastrow - firstrow + 1
+    n_cols = lastcol - firstcol + 1
 
     IO.inspect({group_solve.coord, firstrow, lastrow, firstcol, lastcol}, label: "===> ")
-    IO.inspect(params_n, label: "n = ")
 
-    a = %COO{
-      values: values,
-      rowidx: rowidx,
-      colidx: Nx.subtract(colidx, firstcol - 1),
-      n: params_n
-    }
+
+    a = if is_sparse do
+      %COO{
+        values: values,
+        rowidx: rowidx,
+        colidx: Nx.subtract(colidx, firstcol - 1),
+        n: n_rows
+      }
+    else
+      IO.inspect({n_rows, n_cols}, label: "dense n = ")
+      Makea.coo_to_dense(values, rowidx, Nx.subtract(colidx, firstcol - 1), n_rows, n_cols)
+    end
+
+    IO.inspect(n_rows, label: "n = ")
 
     IO.puts("starting untimed iteration... no defn")
     x = Nx.broadcast(1.0, {lastcol - firstcol + 1})  |> Nx.as_type(:f64) # generate_rhs(params.n)
-    CGx.main(nil, params.shift, a, x, nil, nil, 1, group_row: group_row, group_solve: group_solve)
+    CGx.main(nil, params.shift, n_rows, a, x, nil, nil, 1, group_row: group_row, group_solve: group_solve)
 
     IO.puts("starting timed iterations... no defn")
     x = Nx.broadcast(1.0, {lastcol - firstcol + 1})  |> Nx.as_type(:f64) # generate_rhs(params.n)
 
     {timed_us, {z, rnorm, zeta}} = :timer.tc(fn ->
-        CGx.main(nil, params.shift, a, x, nil, nil, params.niter, group_row: group_row, group_solve: group_solve)
+        CGx.main(nil, params.shift, n_rows, a, x, nil, nil, params.niter, group_row: group_row, group_solve: group_solve)
       end)
 
     IO.puts("Tempo: #{timed_us / 1_000_000} segundos")
@@ -586,16 +591,16 @@ def npb_like_coo_matrix_parallel(problem_size, tol) do
 
   end
 
-  defp spawn_worker(worker_node, problem_size, tol) when is_atom(worker_node) do
+  defp spawn_worker(worker_node, problem_size, is_sparse) when is_atom(worker_node) do
     #if worker_node == Node.self() do
     #  spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [tol])
     #else
-      Node.spawn_link(worker_node, CGxExamples, :npb_like_coo_matrix_parallel, [problem_size, tol])
+      Node.spawn_link(worker_node, CGxExamples, :npb_like_coo_matrix_parallel, [problem_size, is_sparse])
     #end
   end
 
-  defp spawn_worker(_worker_node, problem_size, tol) do
-    spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [problem_size, tol])
+  defp spawn_worker(_worker_node, problem_size, is_sparse) do
+    spawn_link(CGxExamples, :npb_like_coo_matrix_parallel, [problem_size, is_sparse])
   end
 
   defp send_result(pid_manager, result) do

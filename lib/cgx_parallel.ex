@@ -34,8 +34,8 @@ defmodule CGx do
         main_loop(z, shift, a, x, rnorm, zeta, it-1, t0, group_row, group_solve)
   end
 
-  def main(z, shift, a, x, rnorm, zeta, it, opts \\ []) do
-    t0 = Nx.broadcast(0.0, {a.n}) |> Nx.as_type(:f64)  # dummy tensor to pass to matvecmul
+  def main(z, shift, n, a, x, rnorm, zeta, it, opts \\ []) do
+    t0 = Nx.broadcast(0.0, {n}) |> Nx.as_type(:f64)  # dummy tensor to pass to matvecmul
     group_row = opts[:group_row] || nil
     group_solve = opts[:group_solve] || nil
     main_loop(z, shift, a, x, rnorm, zeta, it, t0, group_row, group_solve)

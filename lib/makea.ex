@@ -634,6 +634,26 @@ defmodule Makea do
     }
   end
 
+  def coo_to_dense(values, rowidx, colidx) do
+    n_rows = (Nx.reduce_max(rowidx) |> Nx.to_number()) + 1
+    n_cols = (Nx.reduce_max(colidx) |> Nx.to_number()) + 1
+
+    coo_to_dense(values, rowidx, colidx, n_rows, n_cols)
+  end
+
+  def coo_to_dense(values, rowidx, colidx, n_rows, n_cols) do
+    zero =
+      Nx.broadcast(0.0, {n_rows, n_cols})
+      |> Nx.as_type(values.type)
+
+    indices =
+      [rowidx, colidx]
+      |> Nx.stack(axis: 1)
+      |> Nx.as_type(:s32)
+
+    Nx.indexed_add(zero, indices, values)
+  end
+
 
   def zip3(list_of_tuples) do
     Enum.reduce(list_of_tuples, {[], [], []}, fn {a, b, c}, {la, lb, lc} ->
