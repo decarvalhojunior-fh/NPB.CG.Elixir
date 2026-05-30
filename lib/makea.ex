@@ -77,7 +77,14 @@ defmodule Makea do
         end
       end)
 
-    rows_map_to_coo(rows_map, firstrow, nrows)
+    rows =
+      Enum.map(1..nrows, fn row_offset ->
+        row = firstrow + row_offset - 1
+        row_entries = rows_map |> Map.get(row, []) |> :lists.reverse()
+        consolidate_row_entries(row_entries)
+      end)
+
+    rows_to_coo(rows)
   end
 
   defn makea_coo_defn(key, shift, opts \\ []) do
@@ -416,7 +423,7 @@ defmodule Makea do
 
   defp consolidate_row_entries(entries) do
     # This is the fast equivalent of sparse(): accumulate duplicate columns in a row,
-    # return columns in sorted order, and drop entries that cancel to zero.
+    # keep first-seen column order, and drop entries that cancel to zero.
     {acc_rev, sums} =
       Enum.reduce(entries, {[], %{}}, fn {col, val}, {acc_rev, sums} ->
         if Map.has_key?(sums, col) do
@@ -427,7 +434,7 @@ defmodule Makea do
       end)
 
     acc_rev
-    |> Enum.sort()
+    |> :lists.reverse()
     |> Enum.reduce([], fn col, acc ->
       xi = Map.fetch!(sums, col)
       if xi != 0.0, do: [{col, xi} | acc], else: acc
@@ -435,20 +442,13 @@ defmodule Makea do
     |> :lists.reverse()
   end
 
-  defp rows_map_to_coo(rows_map, firstrow, nrows) do
-    # Materialize one consolidated row at a time so we do not keep both the
-    # row map and a second full list of consolidated rows in memory.
+  defp rows_to_coo(rows) do
+    # This materializes the already-consolidated rows directly as COO output,
+    # replacing the old sparse() -> CSR -> COO path.
     {values_rev, cols_rev, rows_rev} =
-      Enum.reduce(1..nrows, {[], [], []}, fn row_offset, {values_rev, cols_rev, rows_rev} ->
-        row = firstrow + row_offset - 1
-        row0 = row_offset - 1
-
-        entries =
-          rows_map
-          |> Map.get(row, [])
-          |> :lists.reverse()
-          |> consolidate_row_entries()
-
+      rows
+      |> Enum.with_index()
+      |> Enum.reduce({[], [], []}, fn {entries, row0}, {values_rev, cols_rev, rows_rev} ->
         Enum.reduce(entries, {values_rev, cols_rev, rows_rev}, fn {col1, val}, {values_rev, cols_rev, rows_rev} ->
           {[val | values_rev], [col1 - 1 | cols_rev], [row0 | rows_rev]}
         end)

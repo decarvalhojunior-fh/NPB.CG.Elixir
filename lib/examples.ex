@@ -376,6 +376,8 @@ defmodule CGxExamples do
 
     IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
 
+    {values, rowidx, colidx} = Makea.sort_coo(values, rowidx, colidx)
+
     IO.puts("starting untimed iteration... defn")
     x = Nx.broadcast(1.0, {params.n})  |> Nx.as_type(:f64) # generate_rhs(params.n)
     main_jit.(params.shift, values, colidx, rowidx, x, 1)
@@ -406,6 +408,8 @@ defmodule CGxExamples do
     end)
 
     IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
+
+    {values, rowidx, colidx} = Makea.sort_coo(values, rowidx, colidx)
 
     [
       {:f64, values |> Nx.as_type(:f64), Nx.broadcast(1.0, {params.n}) |> Nx.as_type(:f64)},
@@ -443,6 +447,8 @@ defmodule CGxExamples do
     end)
 
     IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
+
+    {values, rowidx, colidx} = Makea.sort_coo(values, rowidx, colidx)
 
     IO.inspect(Nx.size(values), label: "#values")
 
@@ -539,6 +545,8 @@ def npb_like_coo_matrix_parallel(problem_size, is_sparse) do
     end)
 
     IO.puts("Tempo makea: #{timed_makea / 1_000_000} segundos")
+
+    {values, rowidx, colidx} = Makea.sort_coo(values, rowidx, colidx)
 
     IO.inspect(Nx.size(values), label: "#values")
 
